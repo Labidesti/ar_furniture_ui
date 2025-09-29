@@ -420,9 +420,8 @@ class _HomeWrapperState extends State<HomeWrapper> {
     }
   }
 
-  // --- BUILD METHODS MOVED HERE ---
+  // FIX: AR Button is simplified and styled to match the image
   Widget _buildARButton(BuildContext context) {
-    // FIX: Removed circular container/shadow, implemented icon and label
     return GestureDetector(
       onTap: () => _onItemTapped(2), // Navigates to Tutorial screen
       child: Column(
@@ -435,7 +434,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
               kARIconPath,
               height: 28,
               width: 28,
-              color: kPrimaryBlue, // Icon color to match the active state
+              color: kPrimaryBlue,
             ),
           ),
           const Text('AR View', style: TextStyle(color: kPrimaryBlue, fontSize: 10)),
@@ -492,7 +491,6 @@ class _HomeWrapperState extends State<HomeWrapper> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // FIX: The menu button now correctly uses the class/widget reference
       endDrawer: const Drawer(child: MenuScreen()),
       body: IndexedStack(
         index: _selectedIndex,
@@ -508,7 +506,28 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   // --- START OF HELPER METHODS FOR HOME SCREEN ---
+
+  // Helper widget to handle navigation from the App Bar Profile Icon
+  Widget _buildProfileIcon(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        // Navigate to the Profile tab (index 4 in bottom navigation)
+        (context.findAncestorStateOfType<_HomeWrapperState>())?._onItemTapped(4);
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.grey[300],
+        ),
+        child: const Icon(Icons.person, color: kHeaderTextColor),
+      ),
+    );
+  }
+
   SliverAppBar _buildSliverAppBar(BuildContext context) {
+    // This context needs to be the one directly below the Scaffold (the Builder context)
     return SliverAppBar(
       backgroundColor: kCardBackground,
       pinned: true,
@@ -519,15 +538,7 @@ class HomeScreen extends StatelessWidget {
           Image.asset(kLogoPath, height: 32),
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.grey[300],
-                ),
-                child: const Icon(Icons.person, color: kHeaderTextColor),
-              ),
+              _buildProfileIcon(context), // Profile Icon is now clickable
               IconButton(
                 icon: const Icon(Icons.menu, color: kHeaderTextColor),
                 onPressed: () => Scaffold.of(context).openEndDrawer(),
@@ -798,23 +809,129 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My Profile"), backgroundColor: kCardBackground, elevation: 0),
-      body: Center(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("PROFILE"), // Title matching Figma
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false, // Hide back button as it's a root tab
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.exit_to_app, color: kHeaderTextColor),
+            onPressed: () => Navigator.pushNamedAndRemoveUntil(context, "/", (route) => false), // Logout
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.person_pin, size: 80, color: kPrimaryBlue),
-            const SizedBox(height: 16),
-            const Text("User Account Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamedAndRemoveUntil(context, "/", (route) => false);
-              },
-              child: const Text("Logout"),
+            // --- USER INFO SECTION ---
+            Row(
+              children: [
+                // Profile Picture (Placeholder)
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[300],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text("Bruno Pham", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text("bruno203@gmail.com", style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+
+            // --- SETTINGS MENU TILE (Clickable) ---
+            Container(
+              decoration: BoxDecoration(
+                color: kLightBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                title: const Text(
+                  "Setting",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  "Notification, Password, FAQ, Contact", // Subtitle listing the screens
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  // Navigate to the new settings menu screen
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsMenuScreen()));
+                },
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+// --- SETTINGS MENU SCREEN (New Screen) ---
+class SettingsMenuScreen extends StatelessWidget {
+  const SettingsMenuScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Settings"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+      ),
+      body: ListView(
+        children: [
+          _buildSettingsTile(context, "Notifications", Icons.notifications_none, target: AlertsScreen()),
+          _buildSettingsTile(context, "Change Password", Icons.lock_outline, target: ForgotPasswordScreen()), // Reuse ForgotPassword for security action
+          _buildSettingsTile(context, "FAQ & Help", Icons.help_outline, target: PlaceholderScreen(title: "FAQ & Help")),
+          _buildSettingsTile(context, "Contact Us", Icons.support_agent, target: PlaceholderScreen(title: "Contact Us")),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile(BuildContext context, String title, IconData icon, {required Widget target}) {
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(icon, color: kPrimaryBlue),
+          title: Text(title),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => target));
+          },
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+}
+
+// --- PLACEHOLDER SCREEN (New Helper) ---
+class PlaceholderScreen extends StatelessWidget {
+  final String title;
+  const PlaceholderScreen({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Text("This is the $title Screen", style: const TextStyle(fontSize: 18, color: Colors.grey)),
       ),
     );
   }
@@ -989,35 +1106,35 @@ class MenuScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 60),
+          // Logo placed at the top of the menu
           Image.asset(kLogoPath, height: 40),
           const SizedBox(height: 40),
+
+          // About our application tile
           _buildMenuTile(context, "About our application", onPressed: () {
-            _showSnackBar(context, "Showing About App Info");
+            // FIX: Navigate to the new AboutScreen
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AboutScreen()));
           }),
+
+          // Tutorial how to use AR tile
           _buildMenuTile(context, "Tutorial how to use AR", onPressed: () {
             Navigator.pop(context); // Close Drawer
             Navigator.pushNamed(context, "/tutorial");
           }),
-          _buildMenuTile(context, "Profile", onPressed: () {
-            Navigator.pop(context); // Close Drawer
-            // Switch to the Profile tab (index 3 in HomeWrapper children)
-            // Note: This relies on the HomeWrapper already being the current route.
-            Navigator.pushNamed(context, "/home");
-          }),
-          // --- LOGOUT / EXIT TILE ---
-          _buildMenuTile(context, "Exit", onPressed: () {
-            // Navigator function to clear all previous screens and go back to the root (AuthScreen)
-            Navigator.pushNamedAndRemoveUntil(context, "/", (route) => false);
-          }),
+
+          // Note: Profile and Exit tiles are removed here to match your image design.
         ],
       ),
     );
   }
 
-  Widget _buildMenuTile(BuildContext context, String title, {required VoidCallback onPressed}) {
+  Widget _buildMenuTile(BuildContext context, String title,
+      {required VoidCallback onPressed}) {
     return TextButton(
       onPressed: onPressed,
-      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+      style: TextButton.styleFrom(
+          padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
         child: Text(
@@ -1026,6 +1143,62 @@ class MenuScreen extends StatelessWidget {
             fontSize: 18,
             fontWeight: FontWeight.w500,
             color: kHeaderTextColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- ABOUT APPLICATION SCREEN (New Feature) ---
+class AboutScreen extends StatelessWidget {
+  const AboutScreen({super.key});
+
+  // The descriptive text from your mockup
+  static const String _aboutText =
+      "Mandaue Foam AR application aims to enhance the shopping experience for Mandaue Foam customers by allowing them to visualize furniture in their own space using augmented reality. This helps customers make more informed decisions, ensuring that the size, style, and color of furniture items match their home before purchasing.";
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kLightBackgroundColor,
+      body: Center(
+        child: Container(
+          width: 300, // Matching the general width of the menu card
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Close Icon
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 24),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              // Logo
+              Image.asset(kLogoPath, height: 40),
+              const SizedBox(height: 20),
+
+              // Title
+              const Text(
+                "About our application",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500, color: kHeaderTextColor),
+              ),
+              const SizedBox(height: 10),
+
+              // Description
+              const Text(
+                _aboutText,
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
           ),
         ),
       ),
