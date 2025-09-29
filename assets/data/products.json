@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "name": "Coral Desk",
+    "image": "coral_desk.png",
+    "price": 4999
+  },
+  {
+    "id": "2",
+    "name": "Hamilton Sofa Bed Right Chaise",
+    "image": "hamilton_sofa_bed_right_chaise_sofa.png",
+    "price": 15999
+  },
+  {
+    "id": "3",
+    "name": "Tripp Display Cabinet",
+    "image": "tripp_display_cabinet.png",
+    "price": 8999
+  },
+  {
+    "id": "4",
+    "name": "Georgine 3 Chest of Drawer (Maple)",
+    "image": "georgine_3_chest_of_drawer_maple.png",
+    "price": 11999
+  },
+  {
+    "id": "5",
+    "name": "Reese High Display Cabinet with Wheels",
+    "image": "reese_high_display_cabinet_with_wheel.png",
+    "price": 10999
+  }
+]
