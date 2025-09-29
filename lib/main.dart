@@ -67,42 +67,36 @@ void _showSnackBar(BuildContext ctx, String msg, {Color backgroundColor = Colors
   );
 }
 // --- NEW GLOBAL GOOGLE SIGN-IN HANDLER ---
+final GoogleSignIn _googleSignIn = GoogleSignIn();
+
 Future<void> _handleGoogleSignIn(BuildContext context) async {
-  // Use a local loading state if needed, but for simplicity, we'll rely on the button's built-in state.
-
   try {
-    // 1. Trigger the Google Authentication flow
-    final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) return; // User cancelled the sign-in
+    // 🔹 Always sign out first to clear cached account
+    await _googleSignIn.signOut();
 
-    // 2. Obtain the auth details
+    // 🔹 Show Google account picker
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return; // user cancelled
+
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
     final AuthCredential credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
       idToken: googleAuth.idToken,
     );
 
-    // 3. Sign in/Up to Firebase with the Google credential
     await FirebaseAuth.instance.signInWithCredential(credential);
 
-    // Success: Navigate to home screen
     if (context.mounted) {
       _showSnackBar(context, "Signed in with Google!", backgroundColor: kBuyNowColor);
       Navigator.pushReplacementNamed(context, "/home");
     }
-
-  } on FirebaseAuthException catch (e) {
-    String message = "Google Sign-In failed. Please try again.";
-    if (e.code == 'account-exists-with-different-credential') {
-      message = "Account already exists with email. Use the password field.";
-    }
-    if (context.mounted) _showSnackBar(context, message);
-
   } catch (e) {
-    // Catches the fatal runtime error (Pigeon crash) gracefully.
-    if (context.mounted) _showSnackBar(context, "An unexpected error occurred. Please try again.", backgroundColor: Colors.orange);
+    if (context.mounted) {
+      _showSnackBar(context, "Google sign-in failed: $e", backgroundColor: Colors.red);
+    }
   }
 }
+
 // --- APP WIDGET ---
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -394,33 +388,22 @@ class __LoginScreenState extends State<_LoginScreen> {
                 style: TextStyle(color: Colors.grey)),
           ),
 
+// Inside the final Google button block in __LoginScreenState.build (and __RegisterScreenState.build):
+
+// Replace the entire GestureDetector block that starts at "const SizedBox(height: 10)" with this:
+
           // --- GOOGLE SIGN-IN UI ---
           const SizedBox(height: 20),
           const Text("Or continue with", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 10),
 
-          GestureDetector( // Use GestureDetector to keep the click action
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
             onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
-            child: Material(
-              elevation: 2, // Gives a slight elevation matching the primary button
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12), // Apply the desired corner radius
-              child: InkWell( // Use InkWell for splash effect inside Material
-                borderRadius: BorderRadius.circular(12),
-                onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
-                child: Container(
-                  width: double.infinity,
-                  height: 50,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  alignment: Alignment.center,
-                  // FIX: Use the image asset directly. The image already contains the text and logo.
-                  child: Image.asset(
-                    'assets/images/Sign_in_with_google.png', // Or 'Sign_up_with_google.png'
-                    height: 35,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
+            child: Image.asset(
+              'assets/images/Sign_in_with_google.png',
+              height: 50,
+              fit: BoxFit.contain,
             ),
           ),
 // --- END OF GOOGLE SIGN-IN UI ---
@@ -545,38 +528,25 @@ class __RegisterScreenState extends State<_RegisterScreen> {
                 style: TextStyle(color: Colors.grey)),
           ),
 
-// --- GOOGLE SIGN-IN UI ---
+// Inside the final Google button block in __LoginScreenState.build (and __RegisterScreenState.build):
+
+// Replace the entire GestureDetector block that starts at "const SizedBox(height: 10)" with this:
+
+          // --- GOOGLE SIGN-UP UI ---
           const SizedBox(height: 20),
           const Text("Or continue with", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 10),
 
-          GestureDetector(
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
             onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
-            child: Material(
-              elevation: 2,
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
-                child: Container(
-                  width: double.infinity,
-                  height: 50,
-                  // FIX: Reduced vertical padding to give the image more space and prevent clipping.
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                  alignment: Alignment.center,
-                  child: Image.asset(
-                    // Correct Asset Path
-                    'assets/images/Sign_in_with_google.png',
-                    // FIX: Ensure the height is slightly less than the container (50) to prevent overflow
-                    height: 40,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
+            child: Image.asset(
+              'assets/images/Sign_up_with_google.png',
+              height: 50, // Keep it clean without extra box
+              fit: BoxFit.contain,
             ),
           ),
-          // --- END OF GOOGLE SIGN-IN UI ---
+// --- END OF GOOGLE SIGN-UP UI ---
         ],
       ),
     );
@@ -636,18 +606,22 @@ class ForgotPasswordScreen extends StatelessWidget {
     );
   }
 }
-
 // --- HOME SCREEN WRAPPER (Handles Bottom Navigation) ---
 class HomeWrapper extends StatefulWidget {
   const HomeWrapper({super.key});
+
   @override
   State<HomeWrapper> createState() => _HomeWrapperState();
 }
 
-class _HomeWrapperState extends State<HomeWrapper> {
+class _HomeWrapperState extends State<HomeWrapper>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
   int _selectedIndex = 0;
 
-  // The actual screens corresponding to the nav bar items
+  // Screens for navigation
   final List<Widget> _screens = const [
     HomeScreen(),
     SavesScreen(),
@@ -655,12 +629,33 @@ class _HomeWrapperState extends State<HomeWrapper> {
     ProfileScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+
+    // Bouncing animation for AR button
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+
+    _animation = Tween<double>(begin: 0, end: -5).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // Handle tab switching
   void _onItemTapped(int index) {
     if (index == 2) {
-      // Index 2 is the AR button, navigate to Tutorial screen
+      // AR button opens tutorial
       Navigator.pushNamed(context, "/tutorial");
     } else {
-      // Map nav bar index (0, 1, 3, 4) to screens index (0, 1, 2, 3)
       final screenIndex = index > 2 ? index - 1 : index;
       setState(() {
         _selectedIndex = screenIndex;
@@ -668,29 +663,46 @@ class _HomeWrapperState extends State<HomeWrapper> {
     }
   }
 
-  // FIX: AR Button is simplified and styled to match the image
+  // --- AR Button (Animated Bounce) ---
   Widget _buildARButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _onItemTapped(2), // Navigates to Tutorial screen
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(5.0),
-            child: Image.asset(
-              kARIconPath,
-              height: 60,
-              width: 60,
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _animation.value),
+          child: GestureDetector(
+            onTap: () => _onItemTapped(2), // Navigate to AR/Tutorial
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // "TRY ME" text ABOVE the icon
+                const Text(
+                  'TRY ME',
+                  style: TextStyle(
+                    color: kPrimaryBlue,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
 
+                // AR icon ONLY (no circle background)
+                Image.asset(
+                  kARIconPath,
+                  height: 60,
+                  width: 60,
+                  fit: BoxFit.contain,
+                ),
+              ],
             ),
           ),
-          const Text('AR View', style: TextStyle(color: kPrimaryBlue, fontSize: 10)),
-        ],
-      ),
+        );
+      },
     );
   }
 
+  // --- Bottom Nav Bar ---
   Widget _buildBottomNavBar(BuildContext context) {
     return Container(
       height: 80,
@@ -709,7 +721,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
         children: [
           _buildNavBarItem(Icons.home, 'Home', 0, onTap: _onItemTapped),
           _buildNavBarItem(Icons.bookmark_border, 'Saves', 1, onTap: _onItemTapped),
-          _buildARButton(context), // AR button (index 2)
+          _buildARButton(context), // AR Button
           _buildNavBarItem(Icons.notifications_none, 'Alerts', 3, onTap: _onItemTapped),
           _buildNavBarItem(Icons.person_outline, 'Profile', 4, onTap: _onItemTapped),
         ],
@@ -717,8 +729,10 @@ class _HomeWrapperState extends State<HomeWrapper> {
     );
   }
 
-  Widget _buildNavBarItem(IconData icon, String label, int index, {required Function(int) onTap}) {
-    // Logic to correctly set color based on current index
+  // --- Nav Bar Item ---
+  Widget _buildNavBarItem(
+      IconData icon, String label, int index,
+      {required Function(int) onTap}) {
     final screenIndex = index > 2 ? index - 1 : index;
     final isSelected = screenIndex == _selectedIndex && index != 2;
     final color = isSelected ? kPrimaryBlue : Colors.grey[600];
@@ -729,7 +743,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 28),
+          Icon(icon, color: color, size: 24),
           Text(label, style: TextStyle(color: color, fontSize: 10)),
         ],
       ),
@@ -739,7 +753,6 @@ class _HomeWrapperState extends State<HomeWrapper> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      endDrawer: const Drawer(child: MenuScreen()),
       body: IndexedStack(
         index: _selectedIndex,
         children: _screens,
@@ -748,6 +761,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
     );
   }
 }
+
 
 // --- HOME SCREEN CONTENT ---
 class HomeScreen extends StatelessWidget {
@@ -773,6 +787,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // Inside HomeScreen class
   SliverAppBar _buildSliverAppBar(BuildContext context) {
     return SliverAppBar(
       backgroundColor: kCardBackground,
@@ -782,21 +797,25 @@ class HomeScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Image.asset(kLogoPath, height: 32),
-          Builder( // Add a Builder ONLY around the Row with the icons
-            builder: (innerContext) => Row(
-              children: [
-                _buildProfileIcon(innerContext),
-                IconButton(
-                  icon: const Icon(Icons.menu, color: kHeaderTextColor),
-                  onPressed: () => Scaffold.of(innerContext).openEndDrawer(), // Use the innerContext
-                ),
-              ],
-            ),
+          Row(
+            children: [
+              _buildProfileIcon(context),
+              IconButton(
+                icon: const Icon(Icons.grid_view, color: kHeaderTextColor),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CategoriesScreen()),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
 
   SliverToBoxAdapter _buildSectionHeader(String title, String fontFamily) {
     return SliverToBoxAdapter(
@@ -1986,7 +2005,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       color: Colors.grey[200],
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Image.asset(kARIconPath, height: 28, width: 28, color: kPrimaryBlue),
+                    child: Image.asset(
+                      kARIconPath,
+                      height: 28, // increased size for visibility
+                      width: 28,
+                      fit: BoxFit.contain, // makes sure it scales nicely
+                      // remove color if you want the original PNG color
+                    ),
+
                   ),
                 ),
               ],
@@ -2020,6 +2046,134 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// --- CATEGORIES SCREEN ---
+class CategoriesScreen extends StatelessWidget {
+  const CategoriesScreen({super.key});
+
+  final List<Map<String, dynamic>> _categories = const [
+    {"title": "Decorate", "items": 14, "image": "assets/images/category_decorate.jpg"},
+    {"title": "Lighting", "items": 50, "image": "assets/images/category_lighting.jpg"},
+    {"title": "Kitchen", "items": 25, "image": "assets/images/category_kitchen.jpg"},
+    {"title": "Furniture", "items": 16, "image": "assets/images/category_furniture.jpg"},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Categories"),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+        automaticallyImplyLeading: true, // Show back button
+        actions: [
+          // Mock cart icon shown in the mockup
+          Row(
+            children: [
+              Text("4", style: TextStyle(color: kHeaderTextColor, fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: const Icon(Icons.shopping_bag_outlined, color: kHeaderTextColor),
+                onPressed: () => _showSnackBar(context, "Cart functionality is disabled."),
+              ),
+            ],
+          ),
+          // Profile placeholder
+          Container(
+            width: 40,
+            height: 40,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.grey[300]),
+            child: const Icon(Icons.person, color: kHeaderTextColor),
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16.0),
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          return CategoryCard(category: _categories[index]);
+        },
+      ),
+      // Use the HomeWrapper's existing bottom nav logic to show the bar
+    );
+  }
+}
+
+// --- CATEGORY CARD WIDGET ---
+class CategoryCard extends StatelessWidget {
+  final Map<String, dynamic> category;
+  const CategoryCard({super.key, required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    // Note: Since we don't have the background images, we use a simple color placeholder
+    // and rely on the text style from your Figma.
+    return Container(
+      height: 150,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+        // Mock image placeholder (replace with AssetImage if you add images)
+        // image: DecorationImage(image: AssetImage(category["image"]!), fit: BoxFit.cover),
+      ),
+      child: Stack(
+        children: [
+          // Content Gradient/Overlay
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.black54, Colors.transparent],
+              ),
+            ),
+          ),
+
+          // Text Content (Top Left)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category["title"]!,
+                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${category["items"]} items',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+
+          // View All Button (Bottom Right)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: ElevatedButton(
+              onPressed: () => _showSnackBar(context, "Navigating to ${category["title"]} products"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                minimumSize: Size.zero, // Minimal size button
+              ),
+              child: const Text('VIEW ALL', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+        ],
       ),
     );
   }

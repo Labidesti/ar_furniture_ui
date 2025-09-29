@@ -63,3 +63,4 @@ flutter:
   assets:
     - assets/images/
     - assets/data/products.json
+    - assets/images/ar_icon.png
