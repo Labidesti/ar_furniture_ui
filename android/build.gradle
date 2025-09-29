@@ -5,6 +5,11 @@ buildscript {
         google()
         mavenCentral()
     }
+    dependencies {
+        // ADD THIS LINE: Google Services Plugin
+        classpath 'com.google.gms:google-services:4.4.1'
+        // Note: The AGP version is typically defined in settings.gradle or flutter configs
+    }
 }
 
 allprojects {

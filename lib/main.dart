@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
+void main() async {
+  // 1. Ensure widgets are bound
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Initialize Firebase using the generated options
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  runApp(const MyApp());
+}
 // --- CONSTANTS ---
 const Color kPrimaryBlue = Color(0xFF1F41BB);
 const Color kHeaderTextColor = Color(0xFF666666);
@@ -12,6 +25,8 @@ const Color kCardBackground = Color(0xFFFAFAFA);
 const Color kBuyNowColor = Color(0xFF38B000);
 const String kLogoPath = "assets/images/mandauefoam_Logo1.png";
 const String kARIconPath = "assets/images/ar_icon.png";
+
+
 
 // --- UPDATED MOCK DATA WITH ASSET PATHS AND EXTERNAL URLS ---
 const Map<String, dynamic> _mockHomeData = {
@@ -41,17 +56,53 @@ Future<void> _launchURL(BuildContext context, String url) async {
   }
 }
 
-void _showSnackBar(BuildContext ctx, String msg) {
+void _showSnackBar(BuildContext ctx, String msg, {Color backgroundColor = Colors.red}) {
   ScaffoldMessenger.of(ctx).showSnackBar(
-    SnackBar(content: Text(msg)),
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: backgroundColor, // Set background color based on severity/type
+      behavior: SnackBarBehavior.floating, // Helps visibility
+      duration: const Duration(seconds: 3),
+    ),
   );
 }
+// --- NEW GLOBAL GOOGLE SIGN-IN HANDLER ---
+Future<void> _handleGoogleSignIn(BuildContext context) async {
+  // Use a local loading state if needed, but for simplicity, we'll rely on the button's built-in state.
 
-// --- MAIN FUNCTION ---
-void main() {
-  runApp(const MyApp());
+  try {
+    // 1. Trigger the Google Authentication flow
+    final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return; // User cancelled the sign-in
+
+    // 2. Obtain the auth details
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final AuthCredential credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+
+    // 3. Sign in/Up to Firebase with the Google credential
+    await FirebaseAuth.instance.signInWithCredential(credential);
+
+    // Success: Navigate to home screen
+    if (context.mounted) {
+      _showSnackBar(context, "Signed in with Google!", backgroundColor: kBuyNowColor);
+      Navigator.pushReplacementNamed(context, "/home");
+    }
+
+  } on FirebaseAuthException catch (e) {
+    String message = "Google Sign-In failed. Please try again.";
+    if (e.code == 'account-exists-with-different-credential') {
+      message = "Account already exists with email. Use the password field.";
+    }
+    if (context.mounted) _showSnackBar(context, message);
+
+  } catch (e) {
+    // Catches the fatal runtime error (Pigeon crash) gracefully.
+    if (context.mounted) _showSnackBar(context, "An unexpected error occurred. Please try again.", backgroundColor: Colors.orange);
+  }
 }
-
 // --- APP WIDGET ---
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -123,9 +174,11 @@ class MyApp extends StatelessWidget {
 }
 
 // --- REUSABLE PASSWORD TEXT FIELD WIDGET ---
+// --- REUSABLE PASSWORD TEXT FIELD WIDGET ---
 class PasswordTextField extends StatefulWidget {
   final String hintText;
-  const PasswordTextField({super.key, required this.hintText});
+  final TextEditingController? controller; // ADDED Controller parameter
+  const PasswordTextField({super.key, required this.hintText, this.controller});
 
   @override
   State<PasswordTextField> createState() => _PasswordTextFieldState();
@@ -137,6 +190,7 @@ class _PasswordTextFieldState extends State<PasswordTextField> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: widget.controller, // Use the provided controller
       obscureText: !_isVisible,
       decoration: InputDecoration(
         hintText: widget.hintText,
@@ -206,14 +260,73 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// --- LOGIN ---
-class _LoginScreen extends StatelessWidget {
+// --- LOGIN SCREEN ---
+class _LoginScreen extends StatefulWidget {
   final VoidCallback onNavigateToRegister;
   final VoidCallback onNavigateToForgot;
   const _LoginScreen({required this.onNavigateToRegister, required this.onNavigateToForgot});
 
   @override
+  State<_LoginScreen> createState() => __LoginScreenState();
+}
+
+
+// --- LOGIN SCREEN STATE (Firebase Enabled) ---
+class __LoginScreenState extends State<_LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  // --- EMAIL/PASSWORD SIGN-IN FUNCTION (Unchanged) ---
+  Future<void> _signIn() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (mounted) {
+        _showSnackBar(
+            context, "Sign in successful!", backgroundColor: kBuyNowColor);
+        Navigator.pushReplacementNamed(context, "/home");
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case "user-not-found":
+        case "wrong-password":
+        case "invalid-credential":
+          errorMessage =
+          "Invalid email or password. Please check your credentials.";
+          break;
+        case "invalid-email":
+          errorMessage = "The email address format is invalid.";
+          break;
+        default:
+          errorMessage = "Login failed: ${e.message}";
+      }
+      if (mounted) _showSnackBar(context, errorMessage);
+    } catch (e) {
+      if (mounted) _showSnackBar(
+          context, "An unexpected error occurred. Please try again.",
+          backgroundColor: Colors.orange);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+// Inside the __LoginScreenState class:
+  @override
   Widget build(BuildContext context) {
+    // ... (UI elements omitted for brevity)
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
       child: Column(
@@ -238,16 +351,21 @@ class _LoginScreen extends StatelessWidget {
           ),
           const SizedBox(height: 40),
 
-          const TextField(
-            decoration: InputDecoration(hintText: "Email"),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(hintText: "Email"),
           ),
           const SizedBox(height: 16),
-          const PasswordTextField(hintText: "Password"),
+          PasswordTextField(
+            controller: _passwordController,
+            hintText: "Password",
+          ),
 
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: onNavigateToForgot,
+              onPressed: widget.onNavigateToForgot,
               child: const Text(
                 "Forgot your password?",
                 style: TextStyle(color: kPrimaryBlue),
@@ -259,17 +377,53 @@ class _LoginScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.pushReplacementNamed(context, "/home"),
-              child: const Text("Sign in"),
+              onPressed: _isLoading ? null : _signIn,
+              child: _isLoading
+                  ? const SizedBox(width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 3))
+                  : const Text("Sign in"),
             ),
           ),
 
           const SizedBox(height: 20),
           TextButton(
-            onPressed: onNavigateToRegister,
+            onPressed: widget.onNavigateToRegister,
             child: const Text("Create new account",
                 style: TextStyle(color: Colors.grey)),
           ),
+
+          // --- GOOGLE SIGN-IN UI ---
+          const SizedBox(height: 20),
+          const Text("Or continue with", style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 10),
+
+          GestureDetector( // Use GestureDetector to keep the click action
+            onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
+            child: Material(
+              elevation: 2, // Gives a slight elevation matching the primary button
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12), // Apply the desired corner radius
+              child: InkWell( // Use InkWell for splash effect inside Material
+                borderRadius: BorderRadius.circular(12),
+                onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
+                child: Container(
+                  width: double.infinity,
+                  height: 50,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  alignment: Alignment.center,
+                  // FIX: Use the image asset directly. The image already contains the text and logo.
+                  child: Image.asset(
+                    'assets/images/Sign_in_with_google.png', // Or 'Sign_up_with_google.png'
+                    height: 35,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+// --- END OF GOOGLE SIGN-IN UI ---
         ],
       ),
     );
@@ -277,10 +431,56 @@ class _LoginScreen extends StatelessWidget {
 }
 
 // --- REGISTER ---
-class _RegisterScreen extends StatelessWidget {
+// --- REGISTER SCREEN ---
+class _RegisterScreen extends StatefulWidget {
   final VoidCallback onNavigateToLogin;
   const _RegisterScreen({required this.onNavigateToLogin});
 
+  @override
+  State<_RegisterScreen> createState() => __RegisterScreenState();
+}
+
+// --- REGISTER SCREEN STATE (Firebase Enabled) ---
+class __RegisterScreenState extends State<_RegisterScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _signUp() async {
+    if (_passwordController.text.trim() !=
+        _confirmPasswordController.text.trim()) {
+      _showSnackBar(context, "Passwords do not match.");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      // Success: Navigate to home screen
+      if (mounted) Navigator.pushReplacementNamed(context, "/home");
+    } on FirebaseAuthException catch (e) {
+      String message = "Sign up failed.";
+      if (e.code == 'weak-password') {
+        message = 'The password provided is too weak.';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'The account already exists for that email.';
+      }
+      if (mounted) _showSnackBar(context, message);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+// Inside the __RegisterScreenState class:
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -308,27 +508,75 @@ class _RegisterScreen extends StatelessWidget {
           ),
           const SizedBox(height: 40),
 
-          const TextField(decoration: InputDecoration(hintText: "Email")),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(hintText: "Email"),
+          ),
           const SizedBox(height: 16),
-          const PasswordTextField(hintText: "Password"),
+          PasswordTextField(
+            controller: _passwordController,
+            hintText: "Password",
+          ),
           const SizedBox(height: 16),
-          const PasswordTextField(hintText: "Confirm Password"),
+          PasswordTextField(
+            controller: _confirmPasswordController,
+            hintText: "Confirm Password",
+          ),
           const SizedBox(height: 20),
 
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.pushReplacementNamed(context, "/home"),
-              child: const Text("Sign up"),
+              onPressed: _isLoading ? null : _signUp, // Disable if loading
+              child: _isLoading
+                  ? const SizedBox(width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 3))
+                  : const Text("Sign up"),
             ),
           ),
 
           const SizedBox(height: 20),
           TextButton(
-            onPressed: onNavigateToLogin,
+            onPressed: widget.onNavigateToLogin,
             child: const Text("Already have an account",
                 style: TextStyle(color: Colors.grey)),
           ),
+
+// --- GOOGLE SIGN-IN UI ---
+          const SizedBox(height: 20),
+          const Text("Or continue with", style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 10),
+
+          GestureDetector(
+            onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
+            child: Material(
+              elevation: 2,
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _isLoading ? null : () => _handleGoogleSignIn(context),
+                child: Container(
+                  width: double.infinity,
+                  height: 50,
+                  // FIX: Reduced vertical padding to give the image more space and prevent clipping.
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    // Correct Asset Path
+                    'assets/images/Sign_in_with_google.png',
+                    // FIX: Ensure the height is slightly less than the container (50) to prevent overflow
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // --- END OF GOOGLE SIGN-IN UI ---
         ],
       ),
     );
@@ -429,12 +677,12 @@ class _HomeWrapperState extends State<HomeWrapper> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Padding(
-            padding: const EdgeInsets.all(4.0),
+            padding: const EdgeInsets.all(5.0),
             child: Image.asset(
               kARIconPath,
-              height: 28,
-              width: 28,
-              color: kPrimaryBlue,
+              height: 60,
+              width: 60,
+
             ),
           ),
           const Text('AR View', style: TextStyle(color: kPrimaryBlue, fontSize: 10)),
@@ -450,7 +698,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -507,11 +755,10 @@ class HomeScreen extends StatelessWidget {
 
   // --- START OF HELPER METHODS FOR HOME SCREEN ---
 
-  // Helper widget to handle navigation from the App Bar Profile Icon
   Widget _buildProfileIcon(BuildContext context) {
+    // Helper to find the parent HomeWrapper state and switch tabs
     return GestureDetector(
       onTap: () {
-        // Navigate to the Profile tab (index 4 in bottom navigation)
         (context.findAncestorStateOfType<_HomeWrapperState>())?._onItemTapped(4);
       },
       child: Container(
@@ -527,7 +774,6 @@ class HomeScreen extends StatelessWidget {
   }
 
   SliverAppBar _buildSliverAppBar(BuildContext context) {
-    // This context needs to be the one directly below the Scaffold (the Builder context)
     return SliverAppBar(
       backgroundColor: kCardBackground,
       pinned: true,
@@ -536,14 +782,16 @@ class HomeScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Image.asset(kLogoPath, height: 32),
-          Row(
-            children: [
-              _buildProfileIcon(context), // Profile Icon is now clickable
-              IconButton(
-                icon: const Icon(Icons.menu, color: kHeaderTextColor),
-                onPressed: () => Scaffold.of(context).openEndDrawer(),
-              ),
-            ],
+          Builder( // Add a Builder ONLY around the Row with the icons
+            builder: (innerContext) => Row(
+              children: [
+                _buildProfileIcon(innerContext),
+                IconButton(
+                  icon: const Icon(Icons.menu, color: kHeaderTextColor),
+                  onPressed: () => Scaffold.of(innerContext).openEndDrawer(), // Use the innerContext
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -771,32 +1019,278 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
-
-// --- SAVES SCREEN ---
+// --- SAVES SCREEN (Rebuilt to match Figma Favorite List) ---
 class SavesScreen extends StatelessWidget {
   const SavesScreen({super.key});
+
+  // Mock list of saved items based on the provided design
+  final List<Map<String, dynamic>> _savedItems = const [
+    {"name": "Coffee Table", "price": "50.00", "image": "coral_desk.png"},
+    {"name": "Coffee Chair", "price": "20.00", "image": "georgine_3_chest_of_drawer_maple.png"},
+    {"name": "Minimal Stand", "price": "25.00", "image": "reese_high_display_cabinet_with_wheel.png"},
+    {"name": "Minimal Desk", "price": "50.00", "image": "hamilton_sofa_bed_right_chaise_sofa.png"},
+    {"name": "Minimal Lamp", "price": "12.00", "image": "tripp_display_cabinet.png"},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Saved Items"), backgroundColor: kCardBackground, elevation: 0),
-      body: const Center(
-        child: Text("Your saved furniture items will appear here.", style: TextStyle(color: Colors.grey)),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false, // Prevents an extra back button
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Icon(Icons.search, color: Colors.black, size: 28),
+            const Text("FAVORITE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+            // Replaced the cart icon with a generic icon since we removed cart functionality
+            IconButton(
+              icon: const Icon(Icons.shopping_bag_outlined, color: Colors.black),
+              onPressed: () => _showSnackBar(context, "Cart functionality is disabled."),
+            ),
+          ],
+        ),
+      ),
+
+      // Use ListView to build the scrolling list of saved items
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        itemCount: _savedItems.length,
+        itemBuilder: (context, index) {
+          return _buildFavoriteTile(context, _savedItems[index]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildFavoriteTile(BuildContext context, Map<String, dynamic> item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // --- Product Image ---
+          Container(
+            width: 80,
+            height: 80,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: kCardBackground,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                "assets/images/${item["image"]}",
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 30, color: Colors.grey)),
+              ),
+            ),
+          ),
+
+          // --- Title and Price ---
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  item["name"]!,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "\$ ${item["price"]!}",
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+              ],
+            ),
+          ),
+
+          // --- Remove Icon (X) ---
+          IconButton(
+            icon: Icon(Icons.close, color: Colors.grey[600]),
+            onPressed: () => _showSnackBar(context, "Removed ${item["name"]}", backgroundColor: Colors.orange),
+          ),
+
+          // --- Action Button (Replaced Small Cart with Buy Now Intent) ---
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: kPrimaryBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.open_in_new, size: 20, color: Colors.white),
+              onPressed: () {
+                // Since this screen doesn't have the external_url data, we mock it:
+                final mockSlug = item["name"]!.toLowerCase().replaceAll(' ', '-');
+                _launchURL(context, "https://mandauefoam.ph/products/$mockSlug");
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// --- ALERTS/NOTIFICATIONS SCREEN ---
+// --- ALERTS/NOTIFICATIONS SCREEN (Rebuilt to match Figma Notification List) ---
 class AlertsScreen extends StatelessWidget {
   const AlertsScreen({super.key});
+
+  // Mock list of notifications mirroring the types in the Figma design
+  final List<Map<String, dynamic>> _mockNotifications = const [
+    {"type": "order_confirmed", "title": "Your order #123456789 has been confirmed", "status": "New", "image": "coral_desk.png"},
+    {"type": "order_canceled", "title": "Your order #123456789 has been canceled", "status": null, "image": "georgine_3_chest_of_drawer_maple.png"},
+    {"type": "promo_header", "title": "Discover hot sale furniture's this week.", "subtitle": "Turps premium et in arc adipiscing nec.", "status": "HOT!"},
+    {"type": "order_shipped", "title": "Your order #123456789 has been shipped successfully", "subtitle": "Please help us to confirm and rate your order to get 10% discount code for next order.", "image": "hamilton_sofa_bed_right_chaise_sofa.png"},
+    {"type": "order_confirmed", "title": "Your order #123456789 has been confirmed", "status": null, "image": "reese_high_display_cabinet_with_wheel.png"},
+    {"type": "order_canceled", "title": "Your order #123456789 has been canceled", "status": null, "image": "tripp_display_cabinet.png"},
+    {"type": "order_shipped", "title": "Your order #123456789 has been shipped successfully", "subtitle": "Please help us to confirm and rate your order to get 10% discount code for next order.", "image": "coral_desk.png"},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Notifications"), backgroundColor: kCardBackground, elevation: 0),
-      body: const Center(
-        child: Text("Notifications and alerts will be listed here.", style: TextStyle(color: Colors.grey)),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Notifications"),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 24, // Add spacing to align with the rest of the padding
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _mockNotifications.length,
+        itemBuilder: (context, index) {
+          final item = _mockNotifications[index];
+
+          if (item["type"] == "promo_header") {
+            return _buildPromoHeader(item);
+          }
+          return _buildNotificationTile(item);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPromoHeader(Map<String, dynamic> item) {
+    // Large promotional tile
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item["title"]!,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item["subtitle"]!,
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (item["status"] == "HOT!")
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red[800],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text("HOT!", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationTile(Map<String, dynamic> item) {
+    final bool isConfirmed = item["type"] == "order_confirmed" || item["type"] == "order_shipped";
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- Image Thumbnail ---
+          Container(
+            width: 50,
+            height: 50,
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                "assets/images/${item["image"]}",
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, size: 20, color: Colors.grey)),
+              ),
+            ),
+          ),
+
+          // --- Text Content ---
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Main Title (Confirmed/Canceled/Shipped)
+                    Expanded(
+                      child: Text(
+                        item["title"]!,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isConfirmed ? Colors.green[700] : Colors.red[700],
+                          fontSize: 14,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // "New" Status Badge
+                    if (item["status"] == "New")
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(left: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.green[700],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text("New", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Subtitle/Description
+                Text(
+                  item["subtitle"] ?? "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -844,7 +1338,7 @@ class ProfileScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
-                    Text("Bruno Pham", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text("Bruno Pharma", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     Text("bruno203@gmail.com", style: TextStyle(fontSize: 14, color: Colors.grey)),
                   ],
                 ),
@@ -881,6 +1375,7 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 // --- SETTINGS MENU SCREEN (New Screen) ---
+// --- SETTINGS MENU SCREEN (Finalized) ---
 class SettingsMenuScreen extends StatelessWidget {
   const SettingsMenuScreen({super.key});
 
@@ -895,16 +1390,41 @@ class SettingsMenuScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          _buildSettingsTile(context, "Notifications", Icons.notifications_none, target: AlertsScreen()),
-          _buildSettingsTile(context, "Change Password", Icons.lock_outline, target: ForgotPasswordScreen()), // Reuse ForgotPassword for security action
-          _buildSettingsTile(context, "FAQ & Help", Icons.help_outline, target: PlaceholderScreen(title: "FAQ & Help")),
-          _buildSettingsTile(context, "Contact Us", Icons.support_agent, target: PlaceholderScreen(title: "Contact Us")),
+          // Notifications -> Go to the AlertsScreen (which is the actual notification list)
+          _buildSettingsTile(
+            context,
+            "Notifications",
+            Icons.notifications_none,
+            target: const AlertsScreen(),
+          ),
+          // Change Password -> Dedicated local screen
+          _buildSettingsTile(
+            context,
+            "Change Password",
+            Icons.lock_outline,
+            target: const ChangePasswordScreen(),
+          ),
+          // FAQ & Help -> Display text and links from the Mandauefoam help center
+          _buildSettingsTile(
+            context,
+            "FAQ & Help",
+            Icons.help_outline,
+            target: const HelpAndFAQScreen(),
+          ),
+          // Contact Us -> Display contact information and form link
+          _buildSettingsTile(
+            context,
+            "Contact Us",
+            Icons.support_agent,
+            target: const ContactUsScreen(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSettingsTile(BuildContext context, String title, IconData icon, {required Widget target}) {
+  Widget _buildSettingsTile(BuildContext context, String title, IconData icon,
+      {required Widget target}) {
     return Column(
       children: [
         ListTile(
@@ -912,7 +1432,8 @@ class SettingsMenuScreen extends StatelessWidget {
           title: Text(title),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => target));
+            Navigator.push(
+                context, MaterialPageRoute(builder: (_) => target));
           },
         ),
         const Divider(height: 1),
@@ -920,8 +1441,171 @@ class SettingsMenuScreen extends StatelessWidget {
     );
   }
 }
+// --- REUSABLE WEBVIEW SCREEN ---
+class WebViewScreen extends StatelessWidget {
+  final String url;
+  final String title;
 
-// --- PLACEHOLDER SCREEN (New Helper) ---
+  const WebViewScreen({super.key, required this.url, required this.title});
+
+  Future<void> _launchURL(BuildContext context, String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not launch $url")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () => _launchURL(context, url),
+          child: const Text("Open in Browser"),
+        ),
+      ),
+    );
+  }
+}
+
+
+// --- CHANGE PASSWORD SCREEN (New Feature) ---
+class ChangePasswordScreen extends StatelessWidget {
+  const ChangePasswordScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Change Password")),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Update Your Password", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            // Input fields for password change logic
+            const PasswordTextField(hintText: "Current Password"),
+            const SizedBox(height: 16),
+            const PasswordTextField(hintText: "New Password"),
+            const SizedBox(height: 16),
+            const PasswordTextField(hintText: "Confirm New Password"),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _showSnackBar(context, "Password change functionality mocked."),
+                child: const Text("Save New Password"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- FAQ & HELP SCREEN (Text Content) ---
+class HelpAndFAQScreen extends StatelessWidget {
+  const HelpAndFAQScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // URL from the help-center text snippet
+    const String faqUrl = "https://mandauefoam.ph/pages/help-center";
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("FAQ & Help")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Frequently Asked Questions (FAQs)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text(
+              "Check out our Frequently Asked Questions (FAQs) through this link:",
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => _launchURL(context, faqUrl),
+              child: const Text(faqUrl, style: TextStyle(color: kPrimaryBlue)),
+            ),
+            const SizedBox(height: 30),
+            const Text("Need More Help?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text(
+              "For further assistance, please use the Contact Us page or reach out via our Customer Support channels.",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- CONTACT US SCREEN (Support Information) ---
+class ContactUsScreen extends StatelessWidget {
+  const ContactUsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Data from the Facebook Messenger snippet
+    const String hotline = "(02) 8-424-3000";
+    const String chatHours = "9am to 6pm";
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Contact Us")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Customer Support", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 15),
+
+            // --- Hotline ---
+            const Text("Customer Hotline (Luzon):", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(hotline, style: const TextStyle(fontSize: 16, color: kPrimaryBlue)),
+            TextButton(
+              onPressed: () => _launchURL(context, "tel:$hotline"),
+              child: const Text("Tap to Call"),
+            ),
+            const SizedBox(height: 15),
+
+            // --- Availability ---
+            const Text("Available Hours:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(chatHours, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+            const Text("We are available daily at 10am to 6pm for your inquiries and other concerns."),
+            const SizedBox(height: 30),
+
+            // --- Digital Chat / Form Link ---
+            const Text("Online Contact Form", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.link),
+              label: const Text("Open Inquiry Form"),
+              onPressed: () {
+                // Link to the form shown in the provided image (mocking the submission page)
+                _launchURL(context, "https://mandauefoam.ph/pages/contact-us");
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// --- PLACEHOLDER SCREEN ---
 class PlaceholderScreen extends StatelessWidget {
   final String title;
   const PlaceholderScreen({super.key, required this.title});
@@ -931,7 +1615,8 @@ class PlaceholderScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: Center(
-        child: Text("This is the $title Screen", style: const TextStyle(fontSize: 18, color: Colors.grey)),
+        child: Text("This is the $title screen",
+            style: const TextStyle(fontSize: 18, color: Colors.grey)),
       ),
     );
   }

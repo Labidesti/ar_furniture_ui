@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "692154439809",
+    "project_id": "mandaue-foam-ar",
+    "storage_bucket": "mandaue-foam-ar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:692154439809:android:e75cfa2216e2f302b59580",
+        "android_client_info": {
+          "package_name": "com.example.ar_furniture_ui"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "692154439809-qnn6jft4ojn2l8id7fbj28hrt3mep8mi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ar_furniture_ui",
+            "certificate_hash": "a2c9a277b7ff31b5fe3d5751f3b02a2daf4b002a"
+          }
+        },
+        {
+          "client_id": "692154439809-6tvkipn6i3mpjceater5h3ea30knf6gm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBf_96r60qykvhR6xhx9nHdqt-urGdr6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "692154439809-6tvkipn6i3mpjceater5h3ea30knf6gm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

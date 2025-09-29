@@ -37,6 +37,12 @@ dependencies:
   url_launcher: ^6.2.5
   cupertino_icons: ^1.0.8
 
+  # --- START OF REQUIRED FIREBASE DEPENDENCIES ---
+  firebase_core: ^4.1.1  # Manages Firebase project connection
+  firebase_auth: ^6.1.0  # Provides the login, register, and user management features
+  google_sign_in: ^6.1.0
+    # --- END OF REQUIRED FIREBASE DEPENDENCIES ---
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
