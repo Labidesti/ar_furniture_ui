@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 
 // --- CONSTANTS ---
 const Color kPrimaryBlue = Color(0xFF1F41BB);
@@ -399,11 +400,11 @@ class _HomeWrapperState extends State<HomeWrapper> {
   int _selectedIndex = 0;
 
   // The actual screens corresponding to the nav bar items
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const SavesScreen(),
-    const AlertsScreen(),
-    const ProfileScreen(),
+  final List<Widget> _screens = const [
+    HomeScreen(),
+    SavesScreen(),
+    AlertsScreen(),
+    ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -421,26 +422,24 @@ class _HomeWrapperState extends State<HomeWrapper> {
 
   // --- BUILD METHODS MOVED HERE ---
   Widget _buildARButton(BuildContext context) {
+    // FIX: Removed circular container/shadow, implemented icon and label
     return GestureDetector(
       onTap: () => _onItemTapped(2), // Navigates to Tutorial screen
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: kPrimaryBlue,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: kPrimaryBlue.withValues(alpha: 0.5),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Image.asset(
+              kARIconPath,
+              height: 28,
+              width: 28,
+              color: kPrimaryBlue, // Icon color to match the active state
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Image.asset(kARIconPath, height: 28, width: 28, color: Colors.white),
-        ),
+          ),
+          const Text('AR View', style: TextStyle(color: kPrimaryBlue, fontSize: 10)),
+        ],
       ),
     );
   }
@@ -452,7 +451,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -493,7 +492,8 @@ class _HomeWrapperState extends State<HomeWrapper> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      endDrawer: const Drawer(child: MenuScreen()), // Menu screen available on all main screens
+      // FIX: The menu button now correctly uses the class/widget reference
+      endDrawer: const Drawer(child: MenuScreen()),
       body: IndexedStack(
         index: _selectedIndex,
         children: _screens,
@@ -507,6 +507,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  // --- START OF HELPER METHODS FOR HOME SCREEN ---
   SliverAppBar _buildSliverAppBar(BuildContext context) {
     return SliverAppBar(
       backgroundColor: kCardBackground,
@@ -529,7 +530,7 @@ class HomeScreen extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.menu, color: kHeaderTextColor),
-                onPressed: () => Scaffold.of(context).openEndDrawer(), // Open the end drawer
+                onPressed: () => Scaffold.of(context).openEndDrawer(),
               ),
             ],
           ),
@@ -683,6 +684,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildFavoriteCard(BuildContext context, Map<String, dynamic> item) {
+    // Tapping the card navigates to ProductDetailScreen
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
       child: Card(
@@ -728,6 +730,7 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+  // --- END OF HELPER METHODS FOR HOME SCREEN ---
 
   @override
   Widget build(BuildContext context) {
@@ -743,11 +746,11 @@ class HomeScreen extends StatelessWidget {
                 _buildHorizontalList(_mockHomeData["new_collections"]!, _buildCollectionCard),
                 _buildSectionHeader("Favorites", "Roboto"),
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16), // Apply horizontal padding to the grid
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: _buildFavoritesGrid(_mockHomeData["favorites"]!),
                 ),
                 const SliverToBoxAdapter(
-                  // This ensures the last item scrolls up above the bottom navigation bar
+                  // Final spacing to lift content above the fixed bottom bar
                   child: SizedBox(height: 100),
                 ),
               ],
@@ -1150,7 +1153,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   backgroundColor: kBuyNowColor, // Green for "Buy Now"
                 ),
                 onPressed: () {
-                  final String externalUrl = product["external_url"] ?? "https://mandauefoam.ph/products/default-page";
+                  final String externalUrl = widget.product["external_url"] ?? "https://mandauefoam.ph/products/default-page";
                   _launchURL(context, externalUrl);
                 },
                 child: const Text("Buy Now on Mandaue Foam Website"),
@@ -1163,6 +1166,3 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 }
-
-
-
