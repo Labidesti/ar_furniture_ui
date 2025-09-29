@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+
 void main() async {
   // 1. Ensure widgets are bound
   WidgetsFlutterBinding.ensureInitialized();
@@ -273,47 +274,25 @@ class __LoginScreenState extends State<_LoginScreen> {
 
   // --- EMAIL/PASSWORD SIGN-IN FUNCTION (Unchanged) ---
   Future<void> _signIn() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
       if (mounted) {
-        _showSnackBar(
-            context, "Sign in successful!", backgroundColor: kBuyNowColor);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Sign in successful!")),
+        );
         Navigator.pushReplacementNamed(context, "/home");
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case "user-not-found":
-        case "wrong-password":
-        case "invalid-credential":
-          errorMessage =
-          "Invalid email or password. Please check your credentials.";
-          break;
-        case "invalid-email":
-          errorMessage = "The email address format is invalid.";
-          break;
-        default:
-          errorMessage = "Login failed: ${e.message}";
-      }
-      if (mounted) _showSnackBar(context, errorMessage);
-    } catch (e) {
-      if (mounted) _showSnackBar(
-          context, "An unexpected error occurred. Please try again.",
-          backgroundColor: Colors.orange);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ ${e.message}")),
+      );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -554,20 +533,50 @@ class __RegisterScreenState extends State<_RegisterScreen> {
 }
 
 // --- FORGOT PASSWORD ---
-class ForgotPasswordScreen extends StatelessWidget {
+class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final TextEditingController _forgotEmailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _forgotEmailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _resetPassword() async {
+    if (_forgotEmailController.text.isEmpty) {
+      _showSnackBar(context, "Please enter your email.");
+      return;
+    }
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: _forgotEmailController.text.trim());
+      if (mounted) {
+        _showSnackBar(context, "Reset link sent to your email 📧",
+            backgroundColor: Colors.green);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      _showSnackBar(context, "Error: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kLightBackgroundColor,
-      // AppBar handles the back button and Logo
       appBar: AppBar(
         title: Image.asset(kLogoPath, height: 32),
         centerTitle: true,
         backgroundColor: kLightBackgroundColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kPrimaryBlue), // Back button color
+        iconTheme: const IconThemeData(color: kPrimaryBlue),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -578,9 +587,7 @@ class ForgotPasswordScreen extends StatelessWidget {
             const Text(
               "Forgot Password",
               style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: kPrimaryBlue),
+                  fontSize: 28, fontWeight: FontWeight.bold, color: kPrimaryBlue),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -588,15 +595,15 @@ class ForgotPasswordScreen extends StatelessWidget {
               style: TextStyle(color: Colors.black54),
             ),
             const SizedBox(height: 40),
-            const TextField(decoration: InputDecoration(hintText: "Email")),
+            TextField(
+              controller: _forgotEmailController,
+              decoration: const InputDecoration(hintText: "Email"),
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  _showSnackBar(context, "Pretend reset link sent 📧");
-                  Navigator.pop(context);
-                },
+                onPressed: _resetPassword,
                 child: const Text("Send Reset Link"),
               ),
             ),
@@ -606,6 +613,9 @@ class ForgotPasswordScreen extends StatelessWidget {
     );
   }
 }
+
+
+
 // --- HOME SCREEN WRAPPER (Handles Bottom Navigation) ---
 class HomeWrapper extends StatefulWidget {
   const HomeWrapper({super.key});
@@ -890,7 +900,7 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text("\$ ${item["price"]!}", style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue)),
+                      Text('₱ ${item["price"]!}', style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue)),
                       const SizedBox(width: 8),
                       Text(
                         "\$ ${item["oldPrice"]!}",
@@ -994,13 +1004,12 @@ class HomeScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
               child: Text(
-                  "\$ ${item["price"]!}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                    color: kHeaderTextColor,
-                    fontFamily: 'Roboto',
-                  )
+                '₱ ${item["price"]}',  // Use Peso sign instead of $
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
               ),
             ),
           ],
@@ -1421,7 +1430,7 @@ class SettingsMenuScreen extends StatelessWidget {
             context,
             "Change Password",
             Icons.lock_outline,
-            target: const ChangePasswordScreen(),
+            target: const ChangePasswordScreen(), // ✅ new screen with current/new/confirm
           ),
           // FAQ & Help -> Display text and links from the Mandauefoam help center
           _buildSettingsTile(
@@ -1494,33 +1503,96 @@ class WebViewScreen extends StatelessWidget {
 
 
 // --- CHANGE PASSWORD SCREEN (New Feature) ---
-class ChangePasswordScreen extends StatelessWidget {
-  const ChangePasswordScreen({super.key});
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({Key? key}) : super(key: key);
+
+  @override
+  _ChangePasswordScreenState createState() => _ChangePasswordScreenState();
+}
+
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
+  bool _isLoading = false;
+
+  Future<void> _changePassword() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    if (_newPasswordController.text.trim() !=
+        _confirmPasswordController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("❌ New password and confirmation do not match")),
+      );
+      return;
+    }
+
+    try {
+      setState(() => _isLoading = true);
+
+      // Step 1: Re-authenticate with current password
+      final cred = EmailAuthProvider.credential(
+        email: user.email!,
+        password: _currentPasswordController.text.trim(),
+      );
+      await user.reauthenticateWithCredential(cred);
+
+      // Step 2: Update password
+      await user.updatePassword(_newPasswordController.text.trim());
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("✅ Password updated successfully")),
+      );
+      Navigator.pop(context); // go back to settings after success
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("⚠️ Error: ${e.toString()}")),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Change Password")),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Update Your Password", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            // Input fields for password change logic
-            const PasswordTextField(hintText: "Current Password"),
-            const SizedBox(height: 16),
-            const PasswordTextField(hintText: "New Password"),
-            const SizedBox(height: 16),
-            const PasswordTextField(hintText: "Confirm New Password"),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _showSnackBar(context, "Password change functionality mocked."),
-                child: const Text("Save New Password"),
+            TextField(
+              controller: _currentPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Current Password",
+                prefixIcon: Icon(Icons.lock_outline),
               ),
+            ),
+            TextField(
+              controller: _newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "New Password",
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+            TextField(
+              controller: _confirmPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Confirm Password",
+                prefixIcon: Icon(Icons.lock_reset),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _changePassword,
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Update Password"),
             ),
           ],
         ),
@@ -1528,6 +1600,7 @@ class ChangePasswordScreen extends StatelessWidget {
     );
   }
 }
+
 
 // --- FAQ & HELP SCREEN (Text Content) ---
 class HelpAndFAQScreen extends StatelessWidget {
@@ -1641,7 +1714,10 @@ class PlaceholderScreen extends StatelessWidget {
   }
 }
 
-// --- TUTORIAL SCREEN ---
+
+/// ----------------------
+/// TUTORIAL SCREEN
+/// ----------------------
 class TutorialScreen extends StatefulWidget {
   const TutorialScreen({super.key});
 
@@ -1676,8 +1752,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
               return _buildTutorialPage(context, page, index);
             },
           ),
-
-          // Navigation Dots
+          // Navigation dots
           Positioned(
             bottom: 80,
             left: 0,
@@ -1692,7 +1767,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   height: 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _currentPage == index ? kPrimaryBlue : Colors.grey,
+                    color: _currentPage == index ? Colors.blue : Colors.grey,
                   ),
                 ),
               ),
@@ -1711,49 +1786,41 @@ class _TutorialScreenState extends State<TutorialScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Close button (Top Right)
           Align(
             alignment: Alignment.topRight,
             child: IconButton(
               icon: const Icon(Icons.close, size: 30),
-              onPressed: () => Navigator.pop(context), // Go back to Home
+              onPressed: () => Navigator.pop(context),
             ),
           ),
           const SizedBox(height: 20),
-
           Text(page['title']!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
-
-          // Placeholder for the Tutorial Image
           Container(
             height: 400,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),
               color: Colors.white,
             ),
-            alignment: Alignment.center,
             child: Text(page['subtitle']!, style: const TextStyle(color: Colors.grey)),
           ),
           const SizedBox(height: 40),
-
-          // Next/Start Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
                 if (isLastPage) {
-                  // Final page: Navigate to actual AR screen
                   Navigator.pushReplacementNamed(context, "/ar_actual");
                 } else {
-                  // Next page
                   _pageController.nextPage(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeIn,
                   );
                 }
               },
-              child: Text(isLastPage ? 'Start AR Experience' : 'Next'),
+              child: Text(isLastPage ? "Start AR Experience" : "Next"),
             ),
           ),
         ],
@@ -1913,7 +1980,7 @@ class AboutScreen extends StatelessWidget {
 // --- PRODUCT DETAIL SCREEN ---
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
-  const ProductDetailScreen({super.key, required this.product});
+  ProductDetailScreen({super.key, required this.product});
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -2174,6 +2241,90 @@ class CategoryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class HomeTutorialOverlay extends StatefulWidget {
+  final VoidCallback onFinish;
+
+  const HomeTutorialOverlay({super.key, required this.onFinish});
+
+  @override
+  State<HomeTutorialOverlay> createState() => HomeTutorialOverlayState();
+}
+
+class HomeTutorialOverlayState extends State<HomeTutorialOverlay> {
+  int _stepIndex = 0;
+
+  final List<Map<String, String>> tutorialSteps = [
+    {
+      "image": "assets/images/georgine_3_chest_of_drawer_maple.png",
+      "title": "Georgine Chest of Drawers",
+      "subtitle": "Stylish storage solution for your room."
+    },
+    {
+      "image": "assets/images/hamilton_sofa_bed_right_chaise_sofa.png",
+      "title": "Hamilton Sofa Bed",
+      "subtitle": "A comfy sofa bed for your living room."
+    },
+    {
+      "image": "assets/images/reese_high_display_cabinet_with_wheel.png",
+      "title": "Reese Display Cabinet",
+      "subtitle": "Showcase items with glass and wheels."
+    },
+    {
+      "image": "assets/images/tripp_display_cabinet.png",
+      "title": "Tripp High Cabinet",
+      "subtitle": "Modern cabinet for display & storage."
+    },
+  ];
+
+  void _nextStep() {
+    if (_stepIndex < tutorialSteps.length - 1) {
+      setState(() => _stepIndex++);
+    } else {
+      widget.onFinish();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = tutorialSteps[_stepIndex];
+
+    return Scaffold(
+      backgroundColor: Colors.black54,
+      body: GestureDetector(
+        onTap: _nextStep,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(step["image"]!, height: 200),
+              const SizedBox(height: 20),
+              Text(
+                step["title"]!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                step["subtitle"]!,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 30),
+              Text(
+                "Tap anywhere to continue",
+                style: TextStyle(color: Colors.white.withOpacity(0.7)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
