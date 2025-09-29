@@ -1,34 +1,50 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 
 // --- CONSTANTS ---
-// Colors based on Figma:
 const Color kPrimaryBlue = Color(0xFF1F41BB);
 const Color kHeaderTextColor = Color(0xFF666666);
 const Color kLightFieldColor = Color(0xFFF1F4FF);
-const Color kLightBackgroundColor = Color(0xFFF9FAFD); // Auth screen background
-const Color kCardBackground = Color(0xFFFAFAFA); // Home screen background
-const Color kDisabledColor = Color(0xFF896BFF); // Purple color from add to cart button
+const Color kLightBackgroundColor = Color(0xFFF9FAFD);
+const Color kCardBackground = Color(0xFFFAFAFA);
+const Color kBuyNowColor = Color(0xFF38B000);
+const String kLogoPath = "assets/images/mandauefoam_Logo1.png";
+const String kARIconPath = "assets/images/ar_icon.png";
 
-// Placeholder data structure to match the complex Figma layout
+// --- UPDATED MOCK DATA WITH ASSET PATHS AND EXTERNAL URLS ---
 const Map<String, dynamic> _mockHomeData = {
   "offers": [
-    {"name": "Large table lamp Mallorca", "price": "150", "oldPrice": "205", "image": "coral_desk.png"},
-    {"name": "Silas dispensers", "price": "20", "oldPrice": "28", "image":
-    "georgine_3_chest_of_drawer_maple.png"},
+    {"name": "Large table lamp Mallorca", "price": "150", "oldPrice": "205", "image": "coral_desk.png", "external_url": "https://mandauefoam.ph/products/coral-desk?_pos=1&_psq=coral&_ss=e&_v=1.0"},
+    {"name": "Silas dispensers", "price": "20", "oldPrice": "28", "image": "georgine_3_chest_of_drawer_maple.png", "external_url": "https://mandauefoam.ph/products/georgine-chest-of-drawer-maple?_pos=2&_psq=georgina&_ss=e&_v=1.0"},
   ],
   "new_collections": [
-    {"name": "Large table lamp Mallorca", "price": "205", "description": "Define and tidy your room in one fell swoop with this distinctive dressing table. Part of our Dayton collection, it is designed for small spaces, but can work anywhere you need storage.", "image": "georgine_3_chest_of_drawer_maple.png"},
-    {"name": "Lindwood Nightstand", "price": "821", "description":
-    "Its straight and simple lines give our Linwood collection an attractive and direct style. With its off-white finish and antique hardware details, this bureau offers contrast and a vintage touch.", "image": "hamilton_sofa_bed_right_chaise_sofa.png"},
+    {"name": "Large Chest of Drawers", "price": "205", "description": "Define and tidy your room...", "image": "georgine_3_chest_of_drawer_maple.png", "external_url": "https://mandauefoam.ph/products/georgine-chest-of-drawer-maple?_pos=2&_psq=georgina&_ss=e&_v=1.0"},
+    {"name": "Hamilton Sectional Sofa", "price": "821", "description":
+    "Its straight and simple lines...", "image": "hamilton_sofa_bed_right_chaise_sofa.png", "external_url": "https://mandauefoam.ph/products/hamilton-sofa-bed-right-chaise-sofa?_pos=2&_psq=hamilton&_ss=e&_v=1.0"},
   ],
   "favorites": [
-    {"name": "Oakleigh king size bed", "price": "2,750", "image": "coral_desk.png"},
-    {"name": "Studded armchair Irving", "price": "1,590", "image": "tripp_display_cabinet.png"},
-    {"name": "Balboa armchair single", "price": "150", "image": "georgine_3_chest_of_drawer_maple.png"},
+    {"name": "Coral Desk", "price": "2,750", "image": "coral_desk.png", "external_url": "https://mandauefoam.ph/products/coral-desk?_pos=1&_psq=coral&_ss=e&_v=1.0"},
+    {"name": "Reese Display Cabinet", "price": "1,590", "image": "reese_high_display_cabinet_with_wheel.png", "external_url": "https://mandauefoam.ph/products/reese-high-display-cabinet-with-wheel?_pos=1&_psq=reese&_ss=e&_v=1.0"},
+    {"name": "Tripp Cabinet", "price": "150", "image": "tripp_display_cabinet.png", "external_url": "https://mandauefoam.ph/products/tripp-high-display-cabinet?_pos=1&_psq=tripp&_ss=e&_v=1.0"},
   ]
 };
+
+// --- UTILITY FUNCTIONS ---
+Future<void> _launchURL(BuildContext context, String url) async {
+  final Uri uri = Uri.parse(url);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+  } else {
+    _showSnackBar(context, 'Could not launch $url');
+  }
+}
+
+void _showSnackBar(BuildContext ctx, String msg) {
+  ScaffoldMessenger.of(ctx).showSnackBar(
+    SnackBar(content: Text(msg)),
+  );
+}
 
 // --- MAIN FUNCTION ---
 void main() {
@@ -54,11 +70,11 @@ class MyApp extends StatelessWidget {
         ),
       ).copyWith(secondary: kPrimaryBlue),
       scaffoldBackgroundColor: Colors.white,
-      fontFamily: "Poppins", // Recommended from Figma
+      fontFamily: "Poppins",
       inputDecorationTheme: InputDecorationTheme(
         hintStyle: const TextStyle(color: Colors.grey),
         filled: true,
-        fillColor: kLightFieldColor, // Light blue background for fields
+        fillColor: kLightFieldColor,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -97,9 +113,44 @@ class MyApp extends StatelessWidget {
       initialRoute: "/",
       routes: {
         "/": (context) => const AuthScreen(),
-        "/home": (context) => const HomeScreen(),
-        // Define other screens that might be navigated to via named routes, even if AuthScreen handles them internally
+        "/home": (context) => const HomeWrapper(),
+        "/tutorial": (context) => const TutorialScreen(),
+        "/ar_actual": (context) => const ARViewScreen(),
       },
+    );
+  }
+}
+
+// --- REUSABLE PASSWORD TEXT FIELD WIDGET ---
+class PasswordTextField extends StatefulWidget {
+  final String hintText;
+  const PasswordTextField({super.key, required this.hintText});
+
+  @override
+  State<PasswordTextField> createState() => _PasswordTextFieldState();
+}
+
+class _PasswordTextFieldState extends State<PasswordTextField> {
+  bool _isVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      obscureText: !_isVisible,
+      decoration: InputDecoration(
+        hintText: widget.hintText,
+        suffixIcon: IconButton(
+          icon: Icon(
+            _isVisible ? Icons.visibility : Icons.visibility_off,
+            color: kPrimaryBlue,
+          ),
+          onPressed: () {
+            setState(() {
+              _isVisible = !_isVisible;
+            });
+          },
+        ),
+      ),
     );
   }
 }
@@ -128,6 +179,13 @@ class _AuthScreenState extends State<AuthScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
+  void _goToForgotPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -136,21 +194,22 @@ class _AuthScreenState extends State<AuthScreen> {
         controller: _pageController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          _LoginScreen(onNavigateToRegister: _goToRegister),
+          _LoginScreen(
+            onNavigateToRegister: _goToRegister,
+            onNavigateToForgot: _goToForgotPassword,
+          ),
           _RegisterScreen(onNavigateToLogin: _goToLogin),
-          const _ForgotPasswordScreen(), // keep forgot inside pager if you want
         ],
       ),
     );
   }
 }
 
-////////////////////////
-/// LOGIN
-////////////////////////
+// --- LOGIN ---
 class _LoginScreen extends StatelessWidget {
   final VoidCallback onNavigateToRegister;
-  const _LoginScreen({required this.onNavigateToRegister});
+  final VoidCallback onNavigateToForgot;
+  const _LoginScreen({required this.onNavigateToRegister, required this.onNavigateToForgot});
 
   @override
   Widget build(BuildContext context) {
@@ -160,8 +219,7 @@ class _LoginScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
-          // Logo
-          Image.asset("assets/images/mandauefoam_Logo1.png", height: 80),
+          Image.asset(kLogoPath, height: 80),
           const SizedBox(height: 40),
 
           const Text(
@@ -183,21 +241,12 @@ class _LoginScreen extends StatelessWidget {
             decoration: InputDecoration(hintText: "Email"),
           ),
           const SizedBox(height: 16),
-          const TextField(
-            obscureText: true,
-            decoration: InputDecoration(hintText: "Password"),
-          ),
+          const PasswordTextField(hintText: "Password"),
 
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const _ForgotPasswordScreen()),
-                );
-              },
+              onPressed: onNavigateToForgot,
               child: const Text(
                 "Forgot your password?",
                 style: TextStyle(color: kPrimaryBlue),
@@ -206,7 +255,6 @@ class _LoginScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -227,9 +275,7 @@ class _LoginScreen extends StatelessWidget {
   }
 }
 
-////////////////////////
-/// REGISTER
-////////////////////////
+// --- REGISTER ---
 class _RegisterScreen extends StatelessWidget {
   final VoidCallback onNavigateToLogin;
   const _RegisterScreen({required this.onNavigateToLogin});
@@ -242,7 +288,7 @@ class _RegisterScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
-          Image.asset("assets/images/mandauefoam_Logo1.png", height: 80),
+          Image.asset(kLogoPath, height: 80),
           const SizedBox(height: 40),
 
           const Text(
@@ -263,12 +309,9 @@ class _RegisterScreen extends StatelessWidget {
 
           const TextField(decoration: InputDecoration(hintText: "Email")),
           const SizedBox(height: 16),
-          const TextField(
-              obscureText: true, decoration: InputDecoration(hintText: "Password")),
+          const PasswordTextField(hintText: "Password"),
           const SizedBox(height: 16),
-          const TextField(
-              obscureText: true,
-              decoration: InputDecoration(hintText: "Confirm Password")),
+          const PasswordTextField(hintText: "Confirm Password"),
           const SizedBox(height: 20),
 
           SizedBox(
@@ -291,23 +334,28 @@ class _RegisterScreen extends StatelessWidget {
   }
 }
 
-////////////////////////
-/// FORGOT PASSWORD
-////////////////////////
-class _ForgotPasswordScreen extends StatelessWidget {
-  const _ForgotPasswordScreen();
+// --- FORGOT PASSWORD ---
+class ForgotPasswordScreen extends StatelessWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kLightBackgroundColor,
+      // AppBar handles the back button and Logo
+      appBar: AppBar(
+        title: Image.asset(kLogoPath, height: 32),
+        centerTitle: true,
+        backgroundColor: kLightBackgroundColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: kPrimaryBlue), // Back button color
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Image.asset("assets/images/mandauefoam_Logo1.png", height: 80),
-            const SizedBox(height: 40),
+            const SizedBox(height: 20),
             const Text(
               "Forgot Password",
               style: TextStyle(
@@ -327,8 +375,7 @@ class _ForgotPasswordScreen extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Pretend reset link sent 📧")));
+                  _showSnackBar(context, "Pretend reset link sent 📧");
                   Navigator.pop(context);
                 },
                 child: const Text("Send Reset Link"),
@@ -341,43 +388,124 @@ class _ForgotPasswordScreen extends StatelessWidget {
   }
 }
 
+// --- HOME SCREEN WRAPPER (Handles Bottom Navigation) ---
+class HomeWrapper extends StatefulWidget {
+  const HomeWrapper({super.key});
+  @override
+  State<HomeWrapper> createState() => _HomeWrapperState();
+}
 
-// --- HOME SCREEN (Refactored to Figma design) ---
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class _HomeWrapperState extends State<HomeWrapper> {
+  int _selectedIndex = 0;
+
+  // The actual screens corresponding to the nav bar items
+  final List<Widget> _screens = [
+    const HomeScreen(),
+    const SavesScreen(),
+    const AlertsScreen(),
+    const ProfileScreen(),
+  ];
+
+  void _onItemTapped(int index) {
+    if (index == 2) {
+      // Index 2 is the AR button, navigate to Tutorial screen
+      Navigator.pushNamed(context, "/tutorial");
+    } else {
+      // Map nav bar index (0, 1, 3, 4) to screens index (0, 1, 2, 3)
+      final screenIndex = index > 2 ? index - 1 : index;
+      setState(() {
+        _selectedIndex = screenIndex;
+      });
+    }
+  }
+
+  // --- BUILD METHODS MOVED HERE ---
+  Widget _buildARButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _onItemTapped(2), // Navigates to Tutorial screen
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: kPrimaryBlue,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: kPrimaryBlue.withValues(alpha: 0.5),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Image.asset(kARIconPath, height: 28, width: 28, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavBar(BuildContext context) {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavBarItem(Icons.home, 'Home', 0, onTap: _onItemTapped),
+          _buildNavBarItem(Icons.bookmark_border, 'Saves', 1, onTap: _onItemTapped),
+          _buildARButton(context), // AR button (index 2)
+          _buildNavBarItem(Icons.notifications_none, 'Alerts', 3, onTap: _onItemTapped),
+          _buildNavBarItem(Icons.person_outline, 'Profile', 4, onTap: _onItemTapped),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavBarItem(IconData icon, String label, int index, {required Function(int) onTap}) {
+    // Logic to correctly set color based on current index
+    final screenIndex = index > 2 ? index - 1 : index;
+    final isSelected = screenIndex == _selectedIndex && index != 2;
+    final color = isSelected ? kPrimaryBlue : Colors.grey[600];
+
+    return GestureDetector(
+      onTap: () => onTap(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 28),
+          Text(label, style: TextStyle(color: color, fontSize: 10)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Note: We use a StatelessWidget and define mock data here for a clean single-file example
-    // In a real app, product loading logic (like in the old HomeScreenState) should be kept.
-    // For this demonstration, we focus purely on the Figma layout.
-
     return Scaffold(
-      backgroundColor: kCardBackground, // Light grey background
-      // --- Scrolling Body with Sliver App Bar ---
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(context),
-
-          // --- Offers Section ---
-          _buildSectionHeader("Offers", "Roboto"), // Font family 'Roboto'
-          _buildHorizontalList(_mockHomeData["offers"]!, _buildOfferCard),
-
-          // --- New Collections Section ---
-          _buildSectionHeader("New collections", "Roboto"), // Font family 'Roboto'
-          _buildHorizontalList(_mockHomeData["new_collections"]!, _buildCollectionCard),
-
-          // --- Favorites Section ---
-          _buildSectionHeader("Favorites", "Roboto"), // Font family 'Roboto'
-          _buildFavoritesGrid(_mockHomeData["favorites"]!),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 100)), // Space for bottom bar
-        ],
+      endDrawer: const Drawer(child: MenuScreen()), // Menu screen available on all main screens
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
       ),
-      // --- Custom Bottom Navigation Bar ---
       bottomNavigationBar: _buildBottomNavBar(context),
     );
   }
+}
+
+// --- HOME SCREEN CONTENT ---
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   SliverAppBar _buildSliverAppBar(BuildContext context) {
     return SliverAppBar(
@@ -387,32 +515,9 @@ class HomeScreen extends StatelessWidget {
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Left side: Logo
-          Image.asset("assets/images/mandauefoam_Logo1.png", height: 32), // Logo at the top
-
-          // Right side: Cart and Profile picture
+          Image.asset(kLogoPath, height: 32),
           Row(
             children: [
-              // Cart icon with count
-              Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.shopping_bag_outlined, color: kHeaderTextColor),
-                    onPressed: () {},
-                  ),
-                  const Positioned(
-                    right: 4,
-                    top: 4,
-                    child: CircleAvatar(
-                      radius: 8,
-                      backgroundColor: kPrimaryBlue,
-                      child: Text('4', style: TextStyle(color: Colors.white, fontSize: 10)), // Mock count
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 8),
-              // Profile Picture (Placeholder)
               Container(
                 width: 40,
                 height: 40,
@@ -421,6 +526,10 @@ class HomeScreen extends StatelessWidget {
                   color: Colors.grey[300],
                 ),
                 child: const Icon(Icons.person, color: kHeaderTextColor),
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu, color: kHeaderTextColor),
+                onPressed: () => Scaffold.of(context).openEndDrawer(), // Open the end drawer
               ),
             ],
           ),
@@ -436,9 +545,9 @@ class HomeScreen extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
-            color: kHeaderTextColor, //
-            fontSize: 24, // Adjusted from Figma 40 to fit mobile header size
-            fontWeight: FontWeight.w500, //
+            color: kHeaderTextColor,
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
             fontFamily: fontFamily,
           ),
         ),
@@ -447,10 +556,10 @@ class HomeScreen extends StatelessWidget {
   }
 
   SliverToBoxAdapter _buildHorizontalList(List<Map<String, dynamic>> items, Widget Function(Map<String, dynamic>) cardBuilder) {
-    // Height is determined by the tallest card in this list
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: items.first.containsKey('description') ? 400 : 220,
+        // Set height based on card complexity
+        height: items.first.containsKey('description') ? 280 : 220,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -467,8 +576,8 @@ class HomeScreen extends StatelessWidget {
   SliverGrid _buildFavoritesGrid(List<Map<String, dynamic>> items) {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // Changed to 3 items per row to fit the Figma layout
-        childAspectRatio: 0.7, // Adjust ratio for better fit
+        crossAxisCount: 3,
+        childAspectRatio: 0.7,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -481,12 +590,9 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // --- CARD BUILDERS ---
-
   Widget _buildOfferCard(Map<String, dynamic> item) {
-    // Card for the Offers section
     return Card(
-      color: const Color(0xFFE4ECF3), // Light blue background
+      color: const Color(0xFFE4ECF3),
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -494,7 +600,6 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // Image (Placeholder)
             Image.asset("assets/images/${item["image"]}", height: 80, width: 80, fit: BoxFit.contain),
             const SizedBox(width: 12),
             Expanded(
@@ -527,10 +632,10 @@ class HomeScreen extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () {},
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: kDisabledColor, // Purple/Disabled button look
+                            backgroundColor: kPrimaryBlue,
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           ),
-                          child: const Text('ADD TO CART', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)), //
+                          child: const Text('AR VIEW', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
                         ),
                       ),
                     ],
@@ -545,9 +650,8 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildCollectionCard(Map<String, dynamic> item) {
-    // Card for New Collections section
     return Card(
-      color: const Color(0xFFCECAC5), // Example background color
+      color: const Color(0xFFCECAC5),
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -556,25 +660,21 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image placeholder
-            Expanded(child: Center(child: Image.asset("assets/images/georgine_3_chest_of_drawer_maple.png", fit: BoxFit.cover))),
+            Expanded(child: Center(child: Image.asset("assets/images/${item["image"]}", fit: BoxFit.cover))),
             const SizedBox(height: 12),
-            Text(item["name"]!, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), //
+            Text(item["name"]!, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             Text(item["description"]!, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
             const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("\$ ${item["price"]!}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kDisabledColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  ),
-                  child: const Text('ADD TO CART', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimaryBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 ),
-              ],
+                child: const Text('AR VIEW', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+              ),
             ),
           ],
         ),
@@ -583,7 +683,6 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildFavoriteCard(BuildContext context, Map<String, dynamic> item) {
-    // Card for Favorites grid
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
       child: Card(
@@ -593,11 +692,10 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image placeholder
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Image.asset("assets/images/coral_desk.png", fit: BoxFit.contain),
+                child: Image.asset("assets/images/${item["image"]}", fit: BoxFit.contain),
               ),
             ),
             Padding(
@@ -621,7 +719,7 @@ class HomeScreen extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
                     color: kHeaderTextColor,
-                    fontFamily: 'Roboto', //
+                    fontFamily: 'Roboto',
                   )
               ),
             ),
@@ -631,100 +729,86 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavBar(BuildContext context) {
-    // Custom Bottom Navigation Bar based on Figma
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavBarItem(Icons.home, 'Home', isSelected: true, onTap: () {}),
-          _buildNavBarItem(Icons.bookmark_border, 'Saves', onTap: () {}),
-          _buildARButton(context), // AR button
-          _buildNavBarItem(Icons.notifications_none, 'Alerts', onTap: () {}),
-          _buildNavBarItem(Icons.person_outline, 'Profile', onTap: () {}),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavBarItem(IconData icon, String label, {bool isSelected = false, required VoidCallback onTap}) {
-    final color = isSelected ? kPrimaryBlue : Colors.grey[600];
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 28),
-          Text(label, style: TextStyle(color: color, fontSize: 10)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildARButton(BuildContext context) {
-    // The prominent AR button in the bottom bar
-    return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, "/ar"),
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: kPrimaryBlue,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: kPrimaryBlue.withOpacity(0.5),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        // Used a generic Material Icon since the custom Vector icon is complex to implement without SVG support
-        child: const Icon(Icons.camera_alt, color: Colors.white, size: 30),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Builder(
+          builder: (context) {
+            return CustomScrollView(
+              slivers: [
+                _buildSliverAppBar(context),
+                _buildSectionHeader("Offers", "Roboto"),
+                _buildHorizontalList(_mockHomeData["offers"]!, _buildOfferCard),
+                _buildSectionHeader("New collections", "Roboto"),
+                _buildHorizontalList(_mockHomeData["new_collections"]!, _buildCollectionCard),
+                _buildSectionHeader("Favorites", "Roboto"),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16), // Apply horizontal padding to the grid
+                  sliver: _buildFavoritesGrid(_mockHomeData["favorites"]!),
+                ),
+                const SliverToBoxAdapter(
+                  // This ensures the last item scrolls up above the bottom navigation bar
+                  child: SizedBox(height: 100),
+                ),
+              ],
+            );
+          }
       ),
     );
   }
 }
 
-// --- ALL OTHER SCREENS (Kept for completeness) ---
+// --- SAVES SCREEN ---
+class SavesScreen extends StatelessWidget {
+  const SavesScreen({super.key});
 
-class VerifyEmailScreen extends StatelessWidget {
-  const VerifyEmailScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Verify Email")),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      appBar: AppBar(title: const Text("Saved Items"), backgroundColor: kCardBackground, elevation: 0),
+      body: const Center(
+        child: Text("Your saved furniture items will appear here.", style: TextStyle(color: Colors.grey)),
+      ),
+    );
+  }
+}
+
+// --- ALERTS/NOTIFICATIONS SCREEN ---
+class AlertsScreen extends StatelessWidget {
+  const AlertsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Notifications"), backgroundColor: kCardBackground, elevation: 0),
+      body: const Center(
+        child: Text("Notifications and alerts will be listed here.", style: TextStyle(color: Colors.grey)),
+      ),
+    );
+  }
+}
+
+// --- PROFILE SCREEN ---
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("My Profile"), backgroundColor: kCardBackground, elevation: 0),
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("Pretend verification email sent ✅\nTap below once you’re ready.", textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.email),
-              label: const Text("Resend Email"),
+            const Icon(Icons.person_pin, size: 80, color: kPrimaryBlue),
+            const SizedBox(height: 16),
+            const Text("User Account Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pretend email re-sent 📧")));
+                Navigator.pushNamedAndRemoveUntil(context, "/", (route) => false);
               },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle),
-              label: const Text("I Verified, Continue"),
-              onPressed: () => Navigator.pushReplacementNamed(context, "/home"),
+              child: const Text("Logout"),
             ),
           ],
         ),
@@ -733,39 +817,119 @@ class VerifyEmailScreen extends StatelessWidget {
   }
 }
 
-class ProductDetailScreen extends StatelessWidget {
-  final Map<String, dynamic> product;
-  const ProductDetailScreen({super.key, required this.product});
+// --- TUTORIAL SCREEN ---
+class TutorialScreen extends StatefulWidget {
+  const TutorialScreen({super.key});
 
-  // Use the defined constant blue color
-  static const Color kPrimaryBlue = Color(0xFF1F41BB);
-  static const Color kHeaderTextColor = Color(0xFF666666);
+  @override
+  State<TutorialScreen> createState() => _TutorialScreenState();
+}
+
+class _TutorialScreenState extends State<TutorialScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  final List<Map<String, dynamic>> tutorialPages = [
+    {"title": "TUTORIAL PAGE 1", "subtitle": "Select your desired furniture"},
+    {"title": "TUTORIAL PAGE 2", "subtitle": "Click AR button"},
+    {"title": "TUTORIAL PAGE 3", "subtitle": "Expand to see more available furniture colors"},
+    {"title": "TUTORIAL PAGE 4", "subtitle": "Rotate 3D furniture objects 360°"},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Updated Scaffold and App Bar for clean look
-      appBar: AppBar(
-        title: Text(product["name"]!),
-        backgroundColor: Colors.white,
-        foregroundColor: kPrimaryBlue,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Stack(
         children: [
-          // Product Image
-          Image.asset("assets/images/coral_desk.png", height: 200, fit: BoxFit.contain),
-          const SizedBox(height: 12),
-          Text(product["name"]!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text("₱${product["price"]!}", style: const TextStyle(fontSize: 18, color: kHeaderTextColor)),
+          PageView.builder(
+            controller: _pageController,
+            itemCount: tutorialPages.length,
+            onPageChanged: (int page) {
+              setState(() => _currentPage = page);
+            },
+            itemBuilder: (context, index) {
+              final page = tutorialPages[index];
+              return _buildTutorialPage(context, page, index);
+            },
+          ),
+
+          // Navigation Dots
+          Positioned(
+            bottom: 80,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                tutorialPages.length,
+                    (index) => Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _currentPage == index ? kPrimaryBlue : Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTutorialPage(BuildContext context, Map<String, dynamic> page, int index) {
+    final bool isLastPage = index == tutorialPages.length - 1;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Close button (Top Right)
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 30),
+              onPressed: () => Navigator.pop(context), // Go back to Home
+            ),
+          ),
           const SizedBox(height: 20),
-          // View in AR Button
+
+          Text(page['title']!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+
+          // Placeholder for the Tutorial Image
+          Container(
+            height: 400,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white,
+            ),
+            alignment: Alignment.center,
+            child: Text(page['subtitle']!, style: const TextStyle(color: Colors.grey)),
+          ),
+          const SizedBox(height: 40),
+
+          // Next/Start Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.pushNamed(context, "/ar"),
-              child: const Text("View in AR"),
+              onPressed: () {
+                if (isLastPage) {
+                  // Final page: Navigate to actual AR screen
+                  Navigator.pushReplacementNamed(context, "/ar_actual");
+                } else {
+                  // Next page
+                  _pageController.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeIn,
+                  );
+                }
+              },
+              child: Text(isLastPage ? 'Start AR Experience' : 'Next'),
             ),
           ),
         ],
@@ -774,6 +938,7 @@ class ProductDetailScreen extends StatelessWidget {
   }
 }
 
+// --- AR VIEW (placeholder) ---
 class ARViewScreen extends StatelessWidget {
   const ARViewScreen({super.key});
 
@@ -795,9 +960,9 @@ class ARViewScreen extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton(onPressed: () => _msg(context, "Beige"), child: const Text("Beige")),
-                ElevatedButton(onPressed: () => _msg(context, "Gray"), child: const Text("Gray")),
-                ElevatedButton(onPressed: () => _msg(context, "Blue"), child: const Text("Blue")),
+                ElevatedButton(onPressed: () => _showSnackBar(context, "Beige selected"), child: const Text("Beige")),
+                ElevatedButton(onPressed: () => _showSnackBar(context, "Gray selected"), child: const Text("Gray")),
+                ElevatedButton(onPressed: () => _showSnackBar(context, "Blue selected"), child: const Text("Blue")),
               ],
             ),
           ),
@@ -805,10 +970,199 @@ class ARViewScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _msg(BuildContext ctx, String color) {
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(content: Text("Pretend changed color to $color 🎨")),
+// --- MENU SCREEN (Drawer Content) ---
+class MenuScreen extends StatelessWidget {
+  const MenuScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 300, // Drawer width
+      color: kLightBackgroundColor,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 60),
+          Image.asset(kLogoPath, height: 40),
+          const SizedBox(height: 40),
+          _buildMenuTile(context, "About our application", onPressed: () {
+            _showSnackBar(context, "Showing About App Info");
+          }),
+          _buildMenuTile(context, "Tutorial how to use AR", onPressed: () {
+            Navigator.pop(context); // Close Drawer
+            Navigator.pushNamed(context, "/tutorial");
+          }),
+          _buildMenuTile(context, "Profile", onPressed: () {
+            Navigator.pop(context); // Close Drawer
+            // Switch to the Profile tab (index 3 in HomeWrapper children)
+            // Note: This relies on the HomeWrapper already being the current route.
+            Navigator.pushNamed(context, "/home");
+          }),
+          // --- LOGOUT / EXIT TILE ---
+          _buildMenuTile(context, "Exit", onPressed: () {
+            // Navigator function to clear all previous screens and go back to the root (AuthScreen)
+            Navigator.pushNamedAndRemoveUntil(context, "/", (route) => false);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuTile(BuildContext context, String title, {required VoidCallback onPressed}) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w500,
+            color: kHeaderTextColor,
+          ),
+        ),
+      ),
     );
   }
 }
+
+// --- PRODUCT DETAIL SCREEN ---
+class ProductDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> product;
+  const ProductDetailScreen({super.key, required this.product});
+
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  int _selectedColorIndex = 0;
+  final List<Color> colors = [Colors.black, const Color(0xFFCECAC5), kPrimaryBlue];
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(product["name"]!),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Center(
+                child: Image.asset(
+                  "assets/images/${product["image"]}",
+                  fit: BoxFit.contain,
+                  height: 200,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(product["name"]!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Row(
+                  children: const [
+                    Icon(Icons.star, color: Colors.amber, size: 20),
+                    SizedBox(width: 4),
+                    Text("4.8", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  ],
+                )
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text("Armchair", style: TextStyle(color: Colors.grey, fontSize: 14)),
+            const SizedBox(height: 8),
+            const Text(
+              "Simple & elegant shape makes it very suitable for minimalist rooms... Read More",
+              style: TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(height: 20),
+
+            // --- Colors & AR Button (Small Icon) ---
+            Row(
+              children: [
+                // Color Selector Dots
+                ...List.generate(colors.length, (index) {
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColorIndex = index),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: colors[index],
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedColorIndex == index ? Colors.black : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushNamed(context, "/tutorial"); // Go to tutorial screen
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Image.asset(kARIconPath, height: 28, width: 28, color: kPrimaryBlue),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // --- Full Width Buttons ---
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, "/tutorial"); // Go to tutorial screen
+                },
+                child: const Text("View in AR Camera"),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kBuyNowColor, // Green for "Buy Now"
+                ),
+                onPressed: () {
+                  final String externalUrl = product["external_url"] ?? "https://mandauefoam.ph/products/default-page";
+                  _launchURL(context, externalUrl);
+                },
+                child: const Text("Buy Now on Mandaue Foam Website"),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+
